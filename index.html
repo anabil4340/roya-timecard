@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Roya Time Card">
+  <title>Roya Time Card</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      -webkit-user-select: none;
+      margin: 0;
+      padding: 0;
+      font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      background-color: #f0f0f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    /* Standard WinForms Form Window Styling */
+    .winform-container {
+      background-color: #f0f0f0;
+      border: 1px solid #a0a0a0;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      width: 100%;
+      max-width: 360px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* WinForms Status Banner Area */
+    .status-banner {
+      height: 48px;
+      border: 1px solid #707070;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      font-size: 0.9rem;
+      font-weight: bold;
+      color: #ffffff;
+      white-space: pre-line;
+      visibility: hidden;
+    }
+
+    .status-banner.visible {
+      visibility: visible;
+    }
+
+    /* WinForms TextBox Display */
+    .pin-textbox {
+      background-color: #ffffff;
+      border: 2px solid #7a7a7a;
+      height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.8rem;
+      font-weight: bold;
+      letter-spacing: 6px;
+      color: #000000;
+    }
+
+    /* WinForms Button Grid */
+    .keypad-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    /* Standard WinForms Button Style */
+    .wf-btn {
+      background-color: #e1e1e1;
+      color: #000000;
+      border: 1px solid #adadad;
+      height: 52px;
+      font-size: 1.3rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .wf-btn:active {
+      background-color: #cee5fc;
+      border-color: #0078d7;
+    }
+
+    .wf-btn-action {
+      grid-column: span 3;
+      height: 50px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      color: #ffffff;
+    }
+
+    .wf-btn-clockin {
+      background-color: #0078d7; /* WinForms Primary Blue */
+      border-color: #005a9e;
+    }
+
+    .wf-btn-clockout {
+      background-color: #d13438; /* WinForms Danger Red */
+      border-color: #a82326;
+    }
+
+    .wf-btn-clear {
+      background-color: #cccccc;
+      font-size: 0.95rem;
+    }
+
+    .wf-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="winform-container">
+    <div id="statusBanner" class="status-banner"></div>
+
+    <div id="txtPin" class="pin-textbox"></div>
+
+    <div class="keypad-grid">
+      <button class="wf-btn" onclick="handleNum('1')">1</button>
+      <button class="wf-btn" onclick="handleNum('2')">2</button>
+      <button class="wf-btn" onclick="handleNum('3')">3</button>
+      <button class="wf-btn" onclick="handleNum('4')">4</button>
+      <button class="wf-btn" onclick="handleNum('5')">5</button>
+      <button class="wf-btn" onclick="handleNum('6')">6</button>
+      <button class="wf-btn" onclick="handleNum('7')">7</button>
+      <button class="wf-btn" onclick="handleNum('8')">8</button>
+      <button class="wf-btn" onclick="handleNum('9')">9</button>
+      <button class="wf-btn wf-btn-clear" onclick="resetPinInput()">Clear</button>
+      <button class="wf-btn" onclick="handleNum('0')">0</button>
+      <button class="wf-btn wf-btn-clear" onclick="resetPinInput()">⌫</button>
+
+      <button id="btnIn" class="wf-btn wf-btn-action wf-btn-clockin" onclick="processPunch(true)">Clock In</button>
+      <button id="btnOut" class="wf-btn wf-btn-action wf-btn-clockout" onclick="processPunch(false)">Clock Out</button>
+    </div>
+  </div>
+
+  <script>
+    const CONFIG = {
+      webAppUrl: "https://script.google.com/macros/s/AKfycbxaGPaAgntmeOClsDL8ETBCSF4QwXNIpA47uwqH0b5WiPw9bK5PxzJi1JazFb0egIrCEQ/exec",
+      apiSecret: "RoyaTimeCard_SuperSecretKey_2026",
+      maskDelayMs: 500,
+      bannerDurationMs: 3000
+    };
+
+    let currentPin = "";
+    let maskTimer = null;
+    let resetTimer = null;
+
+    function handleNum(digit) {
+      if (currentPin.length < 6) {
+        currentPin += digit;
+        updatePinDisplay(true);
+
+        clearTimeout(maskTimer);
+        maskTimer = setTimeout(() => {
+          updatePinDisplay(false);
+        }, CONFIG.maskDelayMs);
+      }
+    }
+
+    function updatePinDisplay(showLastDigit) {
+      const display = document.getElementById("txtPin");
+      if (!currentPin) {
+        display.textContent = "";
+        return;
+      }
+
+      if (showLastDigit && currentPin.length > 0) {
+        const masked = "*".repeat(currentPin.length - 1);
+        const last = currentPin.slice(-1);
+        display.textContent = masked + last;
+      } else {
+        display.textContent = "*".repeat(currentPin.length);
+      }
+    }
+
+    function resetPinInput() {
+      clearTimeout(maskTimer);
+      currentPin = "";
+      updatePinDisplay(false);
+    }
+
+    function showStatus(message, backgroundColor) {
+      const banner = document.getElementById("statusBanner");
+      banner.textContent = message;
+      banner.style.backgroundColor = backgroundColor;
+      banner.classList.add("visible");
+
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => {
+        banner.classList.remove("visible");
+        resetPinInput();
+      }, CONFIG.bannerDurationMs);
+    }
+
+    async function processPunch(isClockIn) {
+      if (!currentPin.trim()) {
+        showStatus("Please enter your PIN ID first.", "#ff8c00"); // Dark Orange
+        return;
+      }
+
+      const btnIn = document.getElementById("btnIn");
+      const btnOut = document.getElementById("btnOut");
+      btnIn.disabled = true;
+      btnOut.disabled = true;
+
+      const actionText = isClockIn ? "Clock-In" : "Clock-Out";
+      const payload = {
+        apiKey: CONFIG.apiSecret,
+        pin: currentPin,
+        action: actionText
+      };
+
+      try {
+        // text/plain avoids browser CORS preflight errors with Google Apps Script
+        const response = await fetch(CONFIG.webAppUrl, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+        if (result && result.status === "SUCCESS") {
+          const empName = result.employeeName || "Employee";
+          const actionSuccess = isClockIn ? "Clocked-In" : "Clocked-Out";
+          showStatus(`${empName} ${actionSuccess}!\nTime: ${now}`, "#008000"); // Dark Green
+        } else if (result && result.status === "ALREADY_CLOCKED_IN") {
+          showStatus("Employee Already Clocked-in.", "#ff8c00");
+        } else if (result && result.status === "NOT_CLOCKED_IN") {
+          showStatus("Employee is Not Clocked-in.", "#ff8c00");
+        } else if (result && result.status === "INVALID_PIN") {
+          showStatus("Invalid or Inactive PIN.", "#b22222"); // Dark Red
+        } else {
+          showStatus("Error processing request.", "#b22222");
+        }
+      } catch (err) {
+        showStatus("Network Connection Error.", "#b22222");
+      } finally {
+        btnIn.disabled = false;
+        btnOut.disabled = false;
+        resetPinInput();
+      }
+    }
+  </script>
+</body>
+</html>
