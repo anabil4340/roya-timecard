@@ -6,9 +6,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Roya Time Card">
-  <title>Roya Time Card</title>
+  <title>Roya Time Card - Kiosk Terminal</title>
 
+  <!-- ======================================================================
+       CSS STYLES
+       ====================================================================== -->
   <style>
+    /* Reset & Base Typography */
     * {
       box-sizing: border-box;
       user-select: none;
@@ -28,10 +32,36 @@
       padding: 16px;
     }
 
-    /* Standard WinForms Form Window Styling */
+    /* Top Header Bar Styling */
+    .app-header {
+      width: 100%;
+      max-width: 360px;
+      background-color: #1e293b; /* Dark Navy Slate */
+      color: #ffffff;
+      padding: 16px;
+      text-align: center;
+      border-radius: 6px 6px 0 0;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+
+    .app-header h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .app-header p {
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    /* Main Kiosk Container (Replicating WinForms Window look) */
     .winform-container {
       background-color: #f0f0f0;
       border: 1px solid #a0a0a0;
+      border-top: none;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
       width: 100%;
       max-width: 360px;
@@ -39,9 +69,10 @@
       display: flex;
       flex-direction: column;
       gap: 12px;
+      border-radius: 0 0 6px 6px;
     }
 
-    /* WinForms Status Banner Area */
+    /* Status Notification Banner */
     .status-banner {
       height: 48px;
       border: 1px solid #707070;
@@ -52,7 +83,7 @@
       font-size: 0.9rem;
       font-weight: bold;
       color: #ffffff;
-      white-space: pre-line;
+      white-space: pre-line; /* Allows line breaks (\n) in status messages */
       visibility: hidden;
     }
 
@@ -60,7 +91,7 @@
       visibility: visible;
     }
 
-    /* WinForms TextBox Display */
+    /* PIN Masked Textbox Display */
     .pin-textbox {
       background-color: #ffffff;
       border: 2px solid #7a7a7a;
@@ -74,14 +105,14 @@
       color: #000000;
     }
 
-    /* WinForms Button Grid */
+    /* Keypad Grid (3 Columns) */
     .keypad-grid {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       gap: 8px;
     }
 
-    /* Standard WinForms Button Style */
+    /* WinForms Native-Style Buttons */
     .wf-btn {
       background-color: #e1e1e1;
       color: #000000;
@@ -96,11 +127,13 @@
       -webkit-tap-highlight-color: transparent;
     }
 
+    /* Button Click Active State */
     .wf-btn:active {
       background-color: #cee5fc;
       border-color: #0078d7;
     }
 
+    /* Spanning Action Buttons (Clock-In / Clock-Out) */
     .wf-btn-action {
       grid-column: span 3;
       height: 50px;
@@ -110,12 +143,12 @@
     }
 
     .wf-btn-clockin {
-      background-color: #0078d7; /* WinForms Primary Blue */
+      background-color: #0078d7; /* Primary Blue */
       border-color: #005a9e;
     }
 
     .wf-btn-clockout {
-      background-color: #d13438; /* WinForms Danger Red */
+      background-color: #d13438; /* Danger Red */
       border-color: #a82326;
     }
 
@@ -124,6 +157,7 @@
       font-size: 0.95rem;
     }
 
+    /* Disabled State During Network Request */
     .wf-btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
@@ -132,11 +166,21 @@
 </head>
 <body>
 
+  <!-- Top Header Banner Container -->
+  <header class="app-header">
+    <h1>Roya Supermarket</h1>
+    <p>Employee Time Card Terminal</p>
+  </header>
+
+  <!-- Main Kiosk Form Container -->
   <div class="winform-container">
+    <!-- Feedback Banner for Success/Error Notifications -->
     <div id="statusBanner" class="status-banner"></div>
 
+    <!-- Masked PIN Input Display -->
     <div id="txtPin" class="pin-textbox"></div>
 
+    <!-- Keypad Grid Layout -->
     <div class="keypad-grid">
       <button class="wf-btn" onclick="handleNum('1')">1</button>
       <button class="wf-btn" onclick="handleNum('2')">2</button>
@@ -147,32 +191,55 @@
       <button class="wf-btn" onclick="handleNum('7')">7</button>
       <button class="wf-btn" onclick="handleNum('8')">8</button>
       <button class="wf-btn" onclick="handleNum('9')">9</button>
+      
+      <!-- Clear Entire PIN -->
       <button class="wf-btn wf-btn-clear" onclick="resetPinInput()">Clear</button>
       <button class="wf-btn" onclick="handleNum('0')">0</button>
-      <button class="wf-btn wf-btn-clear" onclick="resetPinInput()">⌫</button>
+      <!-- Backspace Single Digit -->
+      <button class="wf-btn wf-btn-clear" onclick="handleBackspace()">⌫</button>
 
+      <!-- Action Submission Buttons -->
       <button id="btnIn" class="wf-btn wf-btn-action wf-btn-clockin" onclick="processPunch(true)">Clock In</button>
       <button id="btnOut" class="wf-btn wf-btn-action wf-btn-clockout" onclick="processPunch(false)">Clock Out</button>
     </div>
   </div>
 
+  <!-- ======================================================================
+       JAVASCRIPT LOGIC
+       ====================================================================== -->
   <script>
+    /**
+     * Application Configuration Settings
+     */
     const CONFIG = {
+      // Google Apps Script Web App Endpoint URL
       webAppUrl: "https://script.google.com/macros/s/AKfycbwBD67lv4Vk1Y_iQAKh5ZcD0EkrVgKXiUS4M4NryMeyi5FPZZ1emCdpcekHyL0XIG4C/exec",
+      
+      // Shared API Key required by backend authentication
       apiSecret: "RoyaTimeCard_SuperSecretKey_2026",
+      
+      // Delay before converting newly entered digit into an asterisk (ms)
       maskDelayMs: 500,
+      
+      // Duration status banner remains visible before auto-clearing (ms)
       bannerDurationMs: 3000
     };
 
+    // Global Input Buffers & Timer Handles
     let currentPin = "";
     let maskTimer = null;
     let resetTimer = null;
 
+    /**
+     * Handles numeric keypad inputs, enforces a 6-digit PIN cap, and manages momentary character masking.
+     * @param {string} digit - The number character pressed by the user.
+     */
     function handleNum(digit) {
       if (currentPin.length < 6) {
         currentPin += digit;
         updatePinDisplay(true);
 
+        // Reset and start masking timer to cover last digit after 500ms
         clearTimeout(maskTimer);
         maskTimer = setTimeout(() => {
           updatePinDisplay(false);
@@ -180,6 +247,20 @@
       }
     }
 
+    /**
+     * Removes only the last entered character from the PIN buffer (Backspace functionality).
+     */
+    function handleBackspace() {
+      if (currentPin.length > 0) {
+        currentPin = currentPin.slice(0, -1);
+        updatePinDisplay(false);
+      }
+    }
+
+    /**
+     * Updates the text display element representing the entered PIN.
+     * @param {boolean} showLastDigit - If true, displays the last character in plain text while masking preceding characters.
+     */
     function updatePinDisplay(showLastDigit) {
       const display = document.getElementById("txtPin");
       if (!currentPin) {
@@ -196,18 +277,28 @@
       }
     }
 
+    /**
+     * Clears the current PIN buffer, halts active mask timers, and updates the display.
+     */
     function resetPinInput() {
       clearTimeout(maskTimer);
       currentPin = "";
       updatePinDisplay(false);
     }
 
+    /**
+     * Displays the status notification banner with a specified message and background color,
+     * then schedules an automatic reset after 3 seconds.
+     * @param {string} message - Text or multi-line message to display inside the banner.
+     * @param {string} backgroundColor - CSS color value (hex, named, or rgb) applied to banner background.
+     */
     function showStatus(message, backgroundColor) {
       const banner = document.getElementById("statusBanner");
       banner.textContent = message;
       banner.style.backgroundColor = backgroundColor;
       banner.classList.add("visible");
 
+      // Clear existing reset timer and schedule hide action
       clearTimeout(resetTimer);
       resetTimer = setTimeout(() => {
         banner.classList.remove("visible");
@@ -215,16 +306,26 @@
       }, CONFIG.bannerDurationMs);
     }
 
+    /**
+     * Validates input, updates UI buttons/banner for optimistic feedback, and posts 
+     * the time card payload asynchronously to Google Apps Script backend.
+     * @param {boolean} isClockIn - True for Clock-In action; False for Clock-Out action.
+     */
     async function processPunch(isClockIn) {
+      // Input Validation: Check for empty PIN
       if (!currentPin.trim()) {
         showStatus("Please enter your PIN ID first.", "#ff8c00"); // Dark Orange
         return;
       }
 
+      // Disable buttons to prevent double-submit network bugs
       const btnIn = document.getElementById("btnIn");
       const btnOut = document.getElementById("btnOut");
       btnIn.disabled = true;
       btnOut.disabled = true;
+
+      // Optimistic UI: Immediate visual feedback while network call processes
+      showStatus("Processing request...", "#000080"); // Navy Blue
 
       const actionText = isClockIn ? "Clock-In" : "Clock-Out";
       const payload = {
@@ -234,7 +335,7 @@
       };
 
       try {
-        // text/plain avoids browser CORS preflight errors with Google Apps Script
+        // Fetch POST request (text/plain avoids browser CORS preflight checks in Apps Script)
         const response = await fetch(CONFIG.webAppUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
@@ -242,12 +343,13 @@
         });
 
         const result = await response.json();
-        const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
+        // Handle backend status responses
         if (result && result.status === "SUCCESS") {
           const empName = result.employeeName || "Employee";
           const actionSuccess = isClockIn ? "Clocked-In" : "Clocked-Out";
-          showStatus(`${empName} ${actionSuccess}!\nTime: ${now}`, "#008000"); // Dark Green
+          const time = result.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          showStatus(`${empName} ${actionSuccess}!\nTime: ${time}`, "#008000"); // Dark Green
         } else if (result && result.status === "ALREADY_CLOCKED_IN") {
           showStatus("Employee Already Clocked-in.", "#ff8c00");
         } else if (result && result.status === "NOT_CLOCKED_IN") {
@@ -260,6 +362,7 @@
       } catch (err) {
         showStatus("Network Connection Error.", "#b22222");
       } finally {
+        // Re-enable interface buttons and clear input buffer
         btnIn.disabled = false;
         btnOut.disabled = false;
         resetPinInput();
