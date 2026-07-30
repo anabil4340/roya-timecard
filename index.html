@@ -9,8 +9,8 @@
   <title>Roya Time Card - Kiosk Terminal</title>
 
   <!-- ======================================================================
-       CSS STYLES
-       ====================================================================== -->
+        CSS STYLES
+        ====================================================================== -->
   <style>
     /* Reset & Base Typography */
     * {
@@ -133,18 +133,36 @@
       border-color: #0078d7;
     }
 
-    /* Spanning Action Buttons (Clock-In / Clock-Out) */
-    .wf-btn-action {
+    /* Spanning Action Buttons Grid (2x2 Grid Layout below numeric keys) */
+    .action-grid {
       grid-column: span 3;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .wf-btn-action {
       height: 50px;
-      font-size: 1.1rem;
+      font-size: 0.95rem;
       font-weight: bold;
       color: #ffffff;
+      border-radius: 2px;
     }
 
     .wf-btn-clockin {
       background-color: #0078d7; /* Primary Blue */
       border-color: #005a9e;
+    }
+
+    .wf-btn-lunchstart {
+      background-color: #d97706; /* Amber / Orange */
+      border-color: #b45309;
+    }
+
+    .wf-btn-lunchend {
+      background-color: #2563eb; /* Royal Blue */
+      border-color: #1d4ed8;
     }
 
     .wf-btn-clockout {
@@ -158,7 +176,8 @@
     }
 
     /* Disabled State During Network Request */
-    .wf-btn:disabled {
+    .wf-btn:disabled,
+    .wf-btn-action:disabled {
       opacity: 0.6;
       cursor: not-allowed;
     }
@@ -191,11 +210,6 @@
       <button class="wf-btn" onclick="handleNum('7')">7</button>
       <button class="wf-btn" onclick="handleNum('8')">8</button>
       <button class="wf-btn" onclick="handleNum('9')">9</button>
-      <!-- Lunch clock in/out -->
-      <button onclick="sendPunch('Clock-In')">Clock In</button>
-      <button onclick="sendPunch('Lunch-Start')">Start Lunch</button>
-      <button onclick="sendPunch('Lunch-End')">End Lunch</button>
-      <button onclick="sendPunch('Clock-Out')">Clock Out</button>
       
       <!-- Clear Entire PIN -->
       <button class="wf-btn wf-btn-clear" onclick="resetPinInput()">Clear</button>
@@ -203,15 +217,19 @@
       <!-- Backspace Single Digit -->
       <button class="wf-btn wf-btn-clear" onclick="handleBackspace()">⌫</button>
 
-      <!-- Action Submission Buttons -->
-      <button id="btnIn" class="wf-btn wf-btn-action wf-btn-clockin" onclick="processPunch(true)">Clock In</button>
-      <button id="btnOut" class="wf-btn wf-btn-action wf-btn-clockout" onclick="processPunch(false)">Clock Out</button>
+      <!-- Action Submission Buttons Block (2x2 Grid) -->
+      <div class="action-grid">
+        <button id="btnIn" class="wf-btn wf-btn-action wf-btn-clockin" onclick="processPunch('Clock-In')">Clock In</button>
+        <button id="btnLunchStart" class="wf-btn wf-btn-action wf-btn-lunchstart" onclick="processPunch('Lunch-Start')">Start Lunch</button>
+        <button id="btnLunchEnd" class="wf-btn wf-btn-action wf-btn-lunchend" onclick="processPunch('Lunch-End')">End Lunch</button>
+        <button id="btnOut" class="wf-btn wf-btn-action wf-btn-clockout" onclick="processPunch('Clock-Out')">Clock Out</button>
+      </div>
     </div>
   </div>
 
   <!-- ======================================================================
-       JAVASCRIPT LOGIC
-       ====================================================================== -->
+        JAVASCRIPT LOGIC
+        ====================================================================== -->
   <script>
     /**
      * Application Configuration Settings
@@ -312,11 +330,23 @@
     }
 
     /**
+     * Toggles interaction state for all action buttons during network processing.
+     * @param {boolean} disabled - True to disable buttons; False to enable.
+     */
+    function toggleActionButtons(disabled) {
+      const buttonIds = ["btnIn", "btnLunchStart", "btnLunchEnd", "btnOut"];
+      buttonIds.forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.disabled = disabled;
+      });
+    }
+
+    /**
      * Validates input, updates UI buttons/banner for optimistic feedback, and posts 
      * the time card payload asynchronously to Google Apps Script backend.
-     * @param {boolean} isClockIn - True for Clock-In action; False for Clock-Out action.
+     * @param {string} actionType - 'Clock-In', 'Lunch-Start', 'Lunch-End', or 'Clock-Out'.
      */
-    async function processPunch(isClockIn) {
+    async function processPunch(actionType) {
       // Input Validation: Check for empty PIN
       if (!currentPin.trim()) {
         showStatus("Please enter your PIN ID first.", "#ff8c00"); // Dark Orange
@@ -324,19 +354,15 @@
       }
 
       // Disable buttons to prevent double-submit network bugs
-      const btnIn = document.getElementById("btnIn");
-      const btnOut = document.getElementById("btnOut");
-      btnIn.disabled = true;
-      btnOut.disabled = true;
+      toggleActionButtons(true);
 
       // Optimistic UI: Immediate visual feedback while network call processes
       showStatus("Processing request...", "#000080"); // Navy Blue
 
-      const actionText = isClockIn ? "Clock-In" : "Clock-Out";
       const payload = {
         apiKey: CONFIG.apiSecret,
         pin: currentPin,
-        action: actionText
+        action: actionType
       };
 
       try {
@@ -352,9 +378,14 @@
         // Handle backend status responses
         if (result && result.status === "SUCCESS") {
           const empName = result.employeeName || "Employee";
-          const actionSuccess = isClockIn ? "Clocked-In" : "Clocked-Out";
           const time = result.time || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          showStatus(`${empName} ${actionSuccess}!\nTime: ${time}`, "#008000"); // Dark Green
+          
+          let actionLabel = "Clocked-In";
+          if (actionType === "Lunch-Start") actionLabel = "Lunch Started";
+          else if (actionType === "Lunch-End") actionLabel = "Lunch Ended";
+          else if (actionType === "Clock-Out") actionLabel = "Clocked-Out";
+
+          showStatus(`${empName} ${actionLabel}!\nTime: ${time}`, "#008000"); // Dark Green
         } else if (result && result.status === "ALREADY_CLOCKED_IN") {
           showStatus("Employee Already Clocked-in.", "#ff8c00");
         } else if (result && result.status === "NOT_CLOCKED_IN") {
@@ -362,14 +393,14 @@
         } else if (result && result.status === "INVALID_PIN") {
           showStatus("Invalid or Inactive PIN.", "#b22222"); // Dark Red
         } else {
-          showStatus("Error processing request.", "#b22222");
+          const errMsg = (result && result.message) ? result.message : "Error processing request.";
+          showStatus(errMsg, "#b22222");
         }
       } catch (err) {
         showStatus("Network Connection Error.", "#b22222");
       } finally {
         // Re-enable interface buttons and clear input buffer
-        btnIn.disabled = false;
-        btnOut.disabled = false;
+        toggleActionButtons(false);
         resetPinInput();
       }
     }
